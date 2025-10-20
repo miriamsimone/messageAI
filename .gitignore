@@ -1,0 +1,8 @@
+# Xcode & SwiftPM
+DerivedData/
+xcuserdata/
+.build/
+
+# Firebase secrets
+messageAI/Resources/GoogleService-Info.plist
+

@@ -1,0 +1,219 @@
+graph TB
+    subgraph "iOS App - messageAI"
+        subgraph "App Layer"
+            AppEntry[messageAIApp.swift<br/>App Entry Point]
+            AppDelegate[AppDelegate.swift<br/>Lifecycle Management]
+        end
+        
+        subgraph "Views Layer"
+            subgraph "Authentication Views"
+                LoginV[LoginView]
+                SignUpV[SignUpView]
+                UsernameV[UsernameSetupView]
+            end
+            
+            subgraph "Main Views"
+                MainTab[MainTabView]
+                ConvList[ConversationListView]
+                ConvRow[ConversationRowView]
+            end
+            
+            subgraph "Chat Views"
+                ChatV[ChatView]
+                MsgBubble[MessageBubbleView]
+                MsgInput[MessageInputView]
+                ChatHeader[ChatHeaderView]
+                TypingInd[TypingIndicatorView]
+            end
+            
+            subgraph "Contact Views"
+                ContactsV[ContactsView]
+                UserSearch[UserSearchView]
+                ContactRow[ContactRowView]
+                ProfileV[UserProfileView]
+            end
+            
+            subgraph "Group Views"
+                CreateGroup[CreateGroupView]
+                GroupSelect[GroupMemberSelectionView]
+                AddMembers[AddGroupMembersView]
+            end
+            
+            subgraph "Profile Views"
+                ProfileEdit[ProfileEditView]
+                ImgPicker[ProfileImagePicker]
+            end
+            
+            subgraph "Component Views"
+                Loading[LoadingView]
+                Error[ErrorView]
+                ImgViewer[ImageViewer]
+                NetBanner[NetworkStatusBanner]
+            end
+        end
+        
+        subgraph "ViewModels Layer"
+            AuthVM[AuthViewModel]
+            ConvListVM[ConversationListViewModel]
+            ChatVM[ChatViewModel]
+            GroupVM[GroupChatViewModel]
+            SearchVM[UserSearchViewModel]
+            ProfileVM[ProfileViewModel]
+        end
+        
+        subgraph "Services Layer"
+            FirebaseServ[FirebaseService<br/>Initialization]
+            AuthServ[AuthService<br/>Login/Signup]
+            MsgServ[MessageService<br/>Send/Receive]
+            ConvServ[ConversationService<br/>CRUD Operations]
+            UserServ[UserService<br/>Search/Contacts]
+            StorageServ[StorageService<br/>Image Upload]
+            NotifServ[NotificationService<br/>FCM Handler]
+            PresenceServ[PresenceService<br/>Online Status]
+            SyncServ[SyncService<br/>Offline Sync]
+        end
+        
+        subgraph "Persistence Layer"
+            LocalData[LocalDataManager<br/>SwiftData CRUD]
+            MsgQueue[MessageQueue<br/>Offline Messages]
+            Cache[CacheManager<br/>Image Cache]
+        end
+        
+        subgraph "Models"
+            UserModel[User Model]
+            ConvModel[Conversation Model]
+            MsgModel[Message Model]
+            TypingModel[TypingIndicator Model]
+            ContactModel[Contact Model]
+        end
+        
+        subgraph "Utilities"
+            NetMonitor[NetworkMonitor<br/>Connectivity]
+            ImgCompress[ImageCompressor<br/>Image Processing]
+            DateExt[DateFormatter Extensions]
+            StrExt[String Extensions]
+            Constants[Constants]
+        end
+        
+        subgraph "Local Storage"
+            SwiftData[(SwiftData<br/>Local Database)]
+            NSCache[(NSCache<br/>Memory Cache)]
+            DiskCache[(Disk Cache<br/>Images)]
+        end
+    end
+    
+    subgraph "Firebase Backend"
+        subgraph "Firebase Services"
+            FireAuth[Firebase Auth<br/>User Authentication]
+            Firestore[Cloud Firestore<br/>Real-time Database]
+            FireStorage[Firebase Storage<br/>Media Files]
+            FCM[Firebase Cloud Messaging<br/>Push Notifications]
+        end
+        
+        subgraph "Cloud Functions"
+            NotifFunc[Notification Trigger<br/>Send Push on New Message]
+            RateLimit[Rate Limiting<br/>Message Throttling]
+        end
+    end
+    
+    subgraph "Apple Services"
+        APNs[Apple Push Notification Service<br/>APNs]
+    end
+    
+    %% App Entry to Views
+    AppEntry --> MainTab
+    AppEntry --> LoginV
+    
+    %% Views to ViewModels
+    LoginV --> AuthVM
+    SignUpV --> AuthVM
+    UsernameV --> AuthVM
+    ConvList --> ConvListVM
+    ChatV --> ChatVM
+    CreateGroup --> GroupVM
+    UserSearch --> SearchVM
+    ProfileEdit --> ProfileVM
+    
+    %% ViewModels to Services
+    AuthVM --> AuthServ
+    AuthVM --> UserServ
+    ConvListVM --> ConvServ
+    ConvListVM --> LocalData
+    ChatVM --> MsgServ
+    ChatVM --> MsgQueue
+    ChatVM --> LocalData
+    GroupVM --> ConvServ
+    GroupVM --> MsgServ
+    SearchVM --> UserServ
+    ProfileVM --> UserServ
+    ProfileVM --> StorageServ
+    
+    %% Services to Firebase
+    AuthServ --> FireAuth
+    MsgServ --> Firestore
+    ConvServ --> Firestore
+    UserServ --> Firestore
+    StorageServ --> FireStorage
+    NotifServ --> Firestore
+    PresenceServ --> Firestore
+    
+    %% Services to Local Storage
+    LocalData --> SwiftData
+    MsgQueue --> SwiftData
+    Cache --> NSCache
+    Cache --> DiskCache
+    
+    %% Sync Service Orchestration
+    SyncServ --> MsgQueue
+    SyncServ --> MsgServ
+    SyncServ --> NetMonitor
+    NetMonitor -.Monitor.-> SyncServ
+    
+    %% Models Usage
+    LocalData --> UserModel
+    LocalData --> ConvModel
+    LocalData --> MsgModel
+    MsgServ --> MsgModel
+    ConvServ --> ConvModel
+    UserServ --> UserModel
+    
+    %% Utilities
+    ImgPicker --> ImgCompress
+    StorageServ --> ImgCompress
+    MsgBubble --> DateExt
+    
+    %% Firebase to Cloud Functions
+    Firestore -.Trigger.-> NotifFunc
+    Firestore -.Trigger.-> RateLimit
+    
+    %% Cloud Functions to FCM
+    NotifFunc --> FCM
+    RateLimit --> Firestore
+    
+    %% FCM to APNs
+    FCM --> APNs
+    
+    %% APNs to Device
+    APNs -.Push.-> NotifServ
+    
+    %% Real-time Listeners
+    Firestore -.Real-time Updates.-> MsgServ
+    Firestore -.Real-time Updates.-> ConvServ
+    Firestore -.Real-time Updates.-> PresenceServ
+    
+    %% Styling
+    classDef viewStyle fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef vmStyle fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef serviceStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef persistStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef modelStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef firebaseStyle fill:#fff3e0,stroke:#e65100,stroke-width:3px
+    classDef externalStyle fill:#eceff1,stroke:#263238,stroke-width:3px
+    
+    class LoginV,SignUpV,UsernameV,MainTab,ConvList,ChatV,MsgBubble,ContactsV,UserSearch,CreateGroup,ProfileEdit viewStyle
+    class AuthVM,ConvListVM,ChatVM,GroupVM,SearchVM,ProfileVM vmStyle
+    class AuthServ,MsgServ,ConvServ,UserServ,StorageServ,NotifServ,PresenceServ,SyncServ serviceStyle
+    class LocalData,MsgQueue,Cache,SwiftData,NSCache,DiskCache persistStyle
+    class UserModel,ConvModel,MsgModel,TypingModel,ContactModel modelStyle
+    class FireAuth,Firestore,FireStorage,FCM,NotifFunc,RateLimit firebaseStyle
+    class APNs externalStyle
