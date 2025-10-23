@@ -5,13 +5,16 @@ struct ConversationListView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: ConversationListViewModel
     private let currentUserID: String
+    private let presenceService: PresenceService?
     @State private var navigationPath: [ConversationSummary] = []
     @State private var isPresentingNewConversation = false
 
     init(viewModel: ConversationListViewModel,
-         currentUserID: String) {
+         currentUserID: String,
+         presenceService: PresenceService?) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.currentUserID = currentUserID
+        self.presenceService = presenceService
     }
 
     var body: some View {
@@ -71,6 +74,9 @@ struct ConversationListView: View {
             viewModel: ChatViewModel(conversationID: conversation.id,
                                      currentUserID: currentUserID,
                                      messageService: FirestoreMessageService(currentUserID: currentUserID),
+                                     presenceService: presenceService,
+                                     participants: conversation.participantIDs,
+                                     conversationTitle: conversation.title,
                                      modelContext: modelContext)
         )
     }

@@ -1,6 +1,4 @@
 import Foundation
-import Foundation
-import Foundation
 import Combine
 import SwiftData
 
@@ -63,9 +61,9 @@ final class ConversationListViewModel: ObservableObject {
                                         lastMessagePreview: convo.lastMessagePreview,
                                         lastMessageAt: convo.lastMessageTimestamp,
                                         participantIDs: convo.participantIDs,
-                                    isGroup: convo.type == .group,
-                                    groupAvatarURL: convo.groupAvatarURL)
-            }
+                                        isGroup: convo.type == .group,
+                                        groupAvatarURL: convo.groupAvatarURL)
+                }
         }
     }
 

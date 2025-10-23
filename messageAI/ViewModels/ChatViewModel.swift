@@ -8,29 +8,52 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published private(set) var isSending = false
     @Published var errorMessage: String?
+    @Published private(set) var presenceStates: [UserPresenceState] = []
+    @Published private(set) var typingStatuses: [TypingStatus] = []
 
     let conversationID: String
     let currentUserID: String
+    let conversationTitle: String
 
     private let messageService: MessageService
+    private let presenceService: PresenceService?
+    private let participants: [String]
     private let modelContext: ModelContext
     private var listenerToken: MessageListeningToken?
+    private var presenceListener: PresenceListeningToken?
+    private var typingListener: PresenceListeningToken?
+    private var typingTask: Task<Void, Never>?
+    private var isTypingActive = false
 
     init(conversationID: String,
          currentUserID: String,
          messageService: MessageService,
+         presenceService: PresenceService?,
+         participants: [String],
+         conversationTitle: String,
          modelContext: ModelContext) {
         self.conversationID = conversationID
         self.currentUserID = currentUserID
         self.messageService = messageService
+        self.presenceService = presenceService
+        self.participants = participants
+        self.conversationTitle = conversationTitle
         self.modelContext = modelContext
 
         loadLocalMessages()
         startListening()
+        observePresence()
+        observeTyping()
     }
 
     deinit {
         listenerToken?.stop()
+        presenceListener?.stop()
+        typingListener?.stop()
+        typingTask?.cancel()
+        Task { [presenceService, conversationID] in
+            try? await presenceService?.setTypingState(conversationID: conversationID, isTyping: false)
+        }
     }
 
     func sendTextMessage() {
@@ -125,6 +148,64 @@ final class ChatViewModel: ObservableObject {
         isSending = false
     }
 
+    func handleInputChange(_ text: String) {
+        typingTask?.cancel()
+        guard let presenceService else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.isEmpty {
+            if isTypingActive {
+                typingTask = Task { [conversationID, weak self] in
+                    try? await presenceService.setTypingState(conversationID: conversationID, isTyping: false)
+                    await MainActor.run { self?.isTypingActive = false }
+                }
+            }
+            return
+        }
+
+        typingTask = Task { [conversationID, weak self] in
+            guard let self else { return }
+            if !self.isTypingActive {
+                try? await presenceService.setTypingState(conversationID: conversationID, isTyping: true)
+                await MainActor.run { self.isTypingActive = true }
+            }
+
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if Task.isCancelled { return }
+            try? await presenceService.setTypingState(conversationID: conversationID, isTyping: false)
+            await MainActor.run { self.isTypingActive = false }
+        }
+    }
+
+    var presenceStatusText: String {
+        let others = participants.filter { $0 != currentUserID }
+        guard !others.isEmpty else { return "" }
+
+        let states = presenceStates.filter { others.contains($0.userID) }
+        if others.count == 1, let userID = others.first,
+           let state = states.first(where: { $0.userID == userID }) {
+            if state.isOnline { return "Online" }
+            if let lastSeen = state.lastSeen {
+                return "Last seen " + Self.relativeFormatter.localizedString(for: lastSeen, relativeTo: Date())
+            }
+            return "Offline"
+        }
+
+        let onlineCount = states.filter { $0.isOnline }.count
+        if onlineCount == 0 { return "No one online" }
+        if onlineCount == states.count { return "All online" }
+        return "\(onlineCount) online"
+    }
+
+    var typingIndicatorText: String? {
+        let active = typingStatuses.filter { $0.isTyping }
+        guard !active.isEmpty else { return nil }
+        if participants.count <= 2 {
+            return "Typing..."
+        }
+        return "Multiple people typing..."
+    }
+
     private func updateLocalMessage(localID: String, with remote: ChatMessageItem) throws {
         let descriptor = FetchDescriptor<Message>(
             predicate: #Predicate { $0.localID == localID && $0.conversation?.remoteID == conversationID }
@@ -211,4 +292,41 @@ final class ChatViewModel: ObservableObject {
         )
         return try modelContext.fetch(descriptor).first
     }
+
+    private func observePresence() {
+        guard let presenceService else { return }
+        let targets = participants.filter { $0 != currentUserID }
+        guard !targets.isEmpty else { return }
+
+        presenceListener?.stop()
+        presenceListener = presenceService.listenForPresence(userIDs: targets) { [weak self] states in
+            Task { @MainActor in
+                self?.presenceStates = states
+            }
+        } onError: { [weak self] error in
+            Task { @MainActor in
+                self?.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func observeTyping() {
+        guard let presenceService else { return }
+        typingListener?.stop()
+        typingListener = presenceService.listenForTyping(conversationID: conversationID) { [weak self] statuses in
+            Task { @MainActor in
+                self?.typingStatuses = statuses
+            }
+        } onError: { [weak self] error in
+            Task { @MainActor in
+                self?.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter
+    }()
 }

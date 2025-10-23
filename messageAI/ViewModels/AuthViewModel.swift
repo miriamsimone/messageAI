@@ -19,13 +19,17 @@ final class AuthViewModel: ObservableObject {
 
     private let authService: AuthService
     private let userServiceFactory: (String) -> UserService
+    private let presenceServiceFactory: (String) -> PresenceService
     private let modelContext: ModelContext
+    @Published private(set) var presenceService: PresenceService?
 
     init(authService: AuthService = FirebaseAuthService(),
          userServiceFactory: @escaping (String) -> UserService = { FirestoreUserService(currentUserID: $0) },
+         presenceServiceFactory: @escaping (String) -> PresenceService = { FirestorePresenceService(currentUserID: $0) },
          modelContext: ModelContext = ModelContext(ModelContainerProvider.shared)) {
         self.authService = authService
         self.userServiceFactory = userServiceFactory
+        self.presenceServiceFactory = presenceServiceFactory
         self.modelContext = modelContext
         Task { [weak self] in
             await self?.loadInitialSession()
@@ -39,6 +43,7 @@ final class AuthViewModel: ObservableObject {
         }
 
         let updatedSession = await synchronizeProfileAfterAuth(for: session, fallbackUsername: session.username)
+        configurePresenceService(for: updatedSession.userID)
         activeSession = updatedSession
         route = .authenticated(updatedSession)
     }
@@ -49,6 +54,7 @@ final class AuthViewModel: ObservableObject {
             let session = try await self.authService.signIn(email: email, password: password)
             let updatedSession = try await self.synchronizeProfile(for: session,
                                                                    fallbackUsername: session.username)
+            self.configurePresenceService(for: updatedSession.userID)
             self.activeSession = updatedSession
             self.route = .authenticated(updatedSession)
         }
@@ -81,6 +87,8 @@ final class AuthViewModel: ObservableObject {
                         let persisted = try await self.persistProfile(for: updatedSession,
                                                                       username: normalizedUsername,
                                                                       displayName: sanitizedName)
+                        self.configurePresenceService(for: persisted.userID)
+                        try? await self.presenceService?.setUserOnline()
                         await MainActor.run {
                             self.activeSession = persisted
                         }
@@ -91,6 +99,7 @@ final class AuthViewModel: ObservableObject {
                     }
                 }
             } else {
+                self.configurePresenceService(for: updatedSession.userID)
                 self.activeSession = updatedSession
                 self.route = .username(updatedSession)
             }
@@ -98,12 +107,21 @@ final class AuthViewModel: ObservableObject {
     }
 
     func signOut() async {
-        await executeAuthAction { [weak self] in
-            guard let self else { return }
-            try await self.authService.signOut()
-            self.activeSession = nil
-            self.route = .signIn
+        guard !isProcessing else { return }
+        isProcessing = true
+        errorMessage = nil
+
+        do {
+            let service = presenceService
+            try? await service?.setUserOffline()
+            try await authService.signOut()
+            presenceService = nil
+            activeSession = nil
+            route = .signIn
+        } catch {
+            errorMessage = error.localizedDescription
         }
+        isProcessing = false
     }
 
     func completeUsernameSetup(username: String) async {
@@ -183,10 +201,14 @@ final class AuthViewModel: ObservableObject {
         do {
             try await service.upsertProfile(profile)
             try upsertLocalUser(profile)
-            return session.updating(displayName: profile.displayName, username: profile.username)
+            let updatedSession = session.updating(displayName: profile.displayName, username: profile.username)
+            configurePresenceService(for: updatedSession.userID)
+            return updatedSession
         } catch {
             if isOfflineError(error) {
-                return session.updating(displayName: profile.displayName, username: profile.username)
+                let updatedSession = session.updating(displayName: profile.displayName, username: profile.username)
+                configurePresenceService(for: updatedSession.userID)
+                return updatedSession
             }
             throw error
         }
@@ -256,6 +278,10 @@ final class AuthViewModel: ObservableObject {
             return true
         }
         return false
+    }
+
+    private func configurePresenceService(for userID: String) {
+        presenceService = presenceServiceFactory(userID)
     }
 }
 

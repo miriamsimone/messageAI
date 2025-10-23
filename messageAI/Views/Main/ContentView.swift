@@ -25,13 +25,19 @@ struct ContentView: View {
             case .username(let session):
                 UsernameSetupView(viewModel: authViewModel, session: session)
             case .authenticated(let session):
-                MainTabView(session: session,
-                            modelContext: modelContext,
-                            onSignOut: {
-                    Task {
-                        await authViewModel.signOut()
-                    }
-                })
+                if let presenceService = authViewModel.presenceService {
+                    MainTabView(session: session,
+                                modelContext: modelContext,
+                                presenceService: presenceService,
+                                onSignOut: {
+                        Task {
+                            await authViewModel.signOut()
+                        }
+                    })
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                }
         }
     }
         .animation(.easeInOut, value: authViewModel.route)

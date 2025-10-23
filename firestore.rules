@@ -79,20 +79,29 @@ service cloud.firestore {
       allow delete: if isParticipantFromResource();
 
       match /messages/{messageId} {
-        function conversation() {
-          return get(/databases/$(database)/documents/conversations/$(conversationId));
+        function canAccessMessages() {
+          return conversationId.matches('dm_.*' + request.auth.uid + '.*') ||
+                 (exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+                  request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants);
         }
 
-        function isConversationParticipant() {
-          return request.auth != null
-              && request.auth.uid in conversation().data.participants;
-        }
-
-        allow read: if isConversationParticipant();
-        allow create: if isConversationParticipant()
-            && request.auth.uid == request.resource.data.senderId;
+        allow read: if request.auth != null && canAccessMessages();
+        allow create: if request.auth != null 
+            && request.auth.uid == request.resource.data.senderId
+            && canAccessMessages();
         allow update, delete: if request.auth != null
             && request.auth.uid == resource.data.senderId;
+      }
+
+      match /typing/{userId} {
+        function canAccessTyping() {
+          return exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+                 request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        }
+
+        allow read: if request.auth != null && canAccessTyping();
+        allow write: if request.auth != null && request.auth.uid == userId && canAccessTyping();
+        allow delete: if request.auth != null && request.auth.uid == userId && canAccessTyping();
       }
     }
 

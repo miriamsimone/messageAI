@@ -3,14 +3,18 @@ import SwiftData
 
 struct MainTabView: View {
     private let session: AuthSession
+    private let presenceService: PresenceService
     private let onSignOut: () -> Void
     @StateObject private var conversationViewModel: ConversationListViewModel
     @StateObject private var contactsViewModel: UserSearchViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     init(session: AuthSession,
          modelContext: ModelContext,
+         presenceService: PresenceService,
          onSignOut: @escaping () -> Void) {
         self.session = session
+        self.presenceService = presenceService
         self.onSignOut = onSignOut
         _conversationViewModel = StateObject(wrappedValue: ConversationListViewModel(
             conversationService: FirestoreConversationService(
@@ -31,7 +35,8 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             ConversationListView(viewModel: conversationViewModel,
-                                 currentUserID: session.userID)
+                                 currentUserID: session.userID,
+                                 presenceService: presenceService)
                 .tabItem {
                     Label("Chats", systemImage: "bubble.left.and.bubble.right")
                 }
@@ -46,6 +51,23 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Profile", systemImage: "person.crop.circle")
                 }
+        }
+        .task {
+            try? await presenceService.setUserOnline()
+        }
+        .onChange(of: scenePhase) { phase in
+            Task {
+                switch phase {
+                case .active:
+                    try? await presenceService.setUserOnline()
+                case .background:
+                    try? await presenceService.setUserOffline()
+                case .inactive:
+                    break
+                @unknown default:
+                    break
+                }
+            }
         }
     }
 }

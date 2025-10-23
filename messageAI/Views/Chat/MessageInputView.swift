@@ -4,10 +4,17 @@ struct MessageInputView: View {
     @Binding var text: String
     var isSending: Bool
     var onSend: () -> Void
+    var onTextChange: (String) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            TextField("Message", text: $text, axis: .vertical)
+            TextField("Message", text: Binding(
+                get: { text },
+                set: { newValue in
+                    text = newValue
+                    onTextChange(newValue)
+                }
+            ), axis: .vertical)
                 .textInputAutocapitalization(.sentences)
                 .autocorrectionDisabled()
                 .padding(10)
@@ -32,6 +39,5 @@ struct MessageInputView: View {
 }
 
 #Preview {
-    MessageInputView(text: .constant("Hello"), isSending: false) {}
+    MessageInputView(text: .constant("Hello"), isSending: false, onSend: {}, onTextChange: { _ in })
 }
-
