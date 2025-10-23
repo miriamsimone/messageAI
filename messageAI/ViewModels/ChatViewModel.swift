@@ -61,6 +61,13 @@ final class ChatViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
         let localID = UUID().uuidString
         inputText = ""
+        typingTask?.cancel()
+        if isTypingActive {
+            Task { [presenceService, conversationID] in
+                try? await presenceService?.setTypingState(conversationID: conversationID, isTyping: false)
+            }
+            isTypingActive = false
+        }
 
         do {
             try insertLocalMessage(localID: localID, content: trimmed)
@@ -134,6 +141,14 @@ final class ChatViewModel: ObservableObject {
     private func sendMessage(content: String, localID: String) async {
         guard !isSending else { return }
         isSending = true
+
+        if isTypingActive {
+            Task { [presenceService, conversationID] in
+                try? await presenceService?.setTypingState(conversationID: conversationID, isTyping: false)
+            }
+            isTypingActive = false
+        }
+
         do {
             let remote = try await messageService.sendMessage(to: conversationID,
                                                               content: content,
