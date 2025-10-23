@@ -6,9 +6,14 @@ service firebase.storage {
     match /conversations/{conversationId}/media/{allPaths=**} {
       // Helper function to check if user is a participant in the conversation
       function isParticipant() {
-        return request.auth != null &&
-               firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
-               request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participants;
+        // Allow DM conversations based on ID pattern (matches Firestore rules)
+        let isDMParticipant = conversationId.matches('dm_.*' + request.auth.uid + '.*');
+        
+        // Or check if user is in participants array for group conversations
+        let isInParticipants = firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
+                               request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participants;
+        
+        return request.auth != null && (isDMParticipant || isInParticipants);
       }
       
       // Helper function to validate file upload
@@ -55,9 +60,14 @@ service firebase.storage {
     match /conversations/{conversationId}/avatar/{allPaths=**} {
       // Helper function to check if user is a participant
       function isParticipant() {
-        return request.auth != null &&
-               firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
-               request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participants;
+        // Allow DM conversations based on ID pattern (matches Firestore rules)
+        let isDMParticipant = conversationId.matches('dm_.*' + request.auth.uid + '.*');
+        
+        // Or check if user is in participants array for group conversations
+        let isInParticipants = firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
+                               request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participants;
+        
+        return request.auth != null && (isDMParticipant || isInParticipants);
       }
       
       // Helper function to validate avatar
