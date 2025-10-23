@@ -1,9 +1,9 @@
 import Foundation
-import SwiftData
 
-@Model
-final class TypingIndicator {
-    @Attribute(.unique) var id: UUID
+/// Represents a user's typing state in a conversation
+/// Note: This is NOT persisted locally - only used for Firestore real-time state
+struct TypingIndicator: Identifiable, Sendable {
+    var id: UUID
     var conversationID: String
     var userID: String
     var isTyping: Bool

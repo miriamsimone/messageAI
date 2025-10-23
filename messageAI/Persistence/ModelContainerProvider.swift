@@ -6,7 +6,6 @@ enum ModelContainerProvider {
             User.self,
             Conversation.self,
             Message.self,
-            TypingIndicator.self,
             Contact.self
         ])
 
