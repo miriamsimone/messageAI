@@ -17,6 +17,7 @@ final class Conversation {
     var lastMessageTimestamp: Date?
     var createdAt: Date
     var createdByUserID: String
+    var participantDisplayNames: [String: String]
 
     @Relationship(deleteRule: .cascade, inverse: \Message.conversation)
     var messages: [Message]
@@ -29,7 +30,8 @@ final class Conversation {
          lastMessagePreview: String? = nil,
          lastMessageTimestamp: Date? = nil,
          createdAt: Date = .now,
-         createdByUserID: String) {
+         createdByUserID: String,
+         participantDisplayNames: [String: String] = [:]) {
         self.remoteID = remoteID
         self.type = type
         self.participantIDs = participantIDs
@@ -39,7 +41,7 @@ final class Conversation {
         self.lastMessageTimestamp = lastMessageTimestamp
         self.createdAt = createdAt
         self.createdByUserID = createdByUserID
+        self.participantDisplayNames = participantDisplayNames
         self.messages = []
     }
 }
-

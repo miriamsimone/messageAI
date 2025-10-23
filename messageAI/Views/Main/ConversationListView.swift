@@ -8,6 +8,7 @@ struct ConversationListView: View {
     private let presenceService: PresenceService?
     @State private var navigationPath: [ConversationSummary] = []
     @State private var isPresentingNewConversation = false
+    @State private var isPresentingNewGroup = false
 
     init(viewModel: ConversationListViewModel,
          currentUserID: String,
@@ -36,10 +37,22 @@ struct ConversationListView: View {
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { isPresentingNewConversation = true }) {
+                    Menu {
+                        Button {
+                            isPresentingNewConversation = true
+                        } label: {
+                            Label("New Chat", systemImage: "bubble.left.and.bubble.right")
+                        }
+
+                        Button {
+                            isPresentingNewGroup = true
+                        } label: {
+                            Label("New Group", systemImage: "person.3")
+                        }
+                    } label: {
                         Image(systemName: "square.and.pencil")
                     }
-                    .accessibilityLabel("New Conversation")
+                    .accessibilityLabel("Compose")
                 }
 
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -58,6 +71,12 @@ struct ConversationListView: View {
                 handleContactSelection(contact)
             }
         }
+        .sheet(isPresented: $isPresentingNewGroup) {
+            CreateGroupView(ownerUserID: currentUserID,
+                            isProcessing: viewModel.isCreatingConversation) { name, contacts in
+                handleGroupCreation(name: name, contacts: contacts)
+            }
+        }
         .overlay {
             if viewModel.isCreatingConversation {
                 ProgressView("Starting chat…")
@@ -74,8 +93,11 @@ struct ConversationListView: View {
             viewModel: ChatViewModel(conversationID: conversation.id,
                                      currentUserID: currentUserID,
                                      messageService: FirestoreMessageService(currentUserID: currentUserID),
+                                     storageService: FirebaseStorageService(currentUserID: currentUserID),
                                      presenceService: presenceService,
-                                     participants: conversation.participantIDs,
+                                     participantIDs: conversation.participantIDs,
+                                     participantDetails: conversation.participantDetails,
+                                     isGroupConversation: conversation.isGroup,
                                      conversationTitle: conversation.title,
                                      modelContext: modelContext)
         )
@@ -92,6 +114,27 @@ struct ConversationListView: View {
             if let summary = await viewModel.createConversation(with: input) {
                 await MainActor.run {
                     isPresentingNewConversation = false
+                    navigationPath = [summary]
+                }
+            }
+        }
+    }
+
+    private func handleGroupCreation(name: String, contacts: [Contact]) {
+        Task {
+            let inputs = await MainActor.run {
+                contacts.map { contact in
+                    ConversationCreationInput(userID: contact.contactUserID,
+                                              displayName: contact.displayName,
+                                              username: contact.username,
+                                              profilePictureURL: contact.profilePictureURL)
+                }
+            }
+
+            if let summary = await viewModel.createGroupConversation(name: name,
+                                                                     participants: inputs) {
+                await MainActor.run {
+                    isPresentingNewGroup = false
                     navigationPath = [summary]
                 }
             }

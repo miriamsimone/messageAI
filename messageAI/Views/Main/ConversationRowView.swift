@@ -67,10 +67,10 @@ struct ConversationRowView: View {
                                      lastMessagePreview: "Last message preview text",
                                      lastMessageAt: Date(),
                                      participantIDs: [],
+                                     participantDetails: [:],
                                      isGroup: true,
                                      groupAvatarURL: nil)
     ConversationRowView(conversation: sample)
         .padding()
         .previewLayout(.sizeThatFits)
 }
-

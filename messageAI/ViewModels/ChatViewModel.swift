@@ -7,6 +7,7 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var messages: [ChatMessageItem] = []
     @Published var inputText: String = ""
     @Published private(set) var isSending = false
+    @Published private(set) var isUploadingMedia = false
     @Published var errorMessage: String?
     @Published private(set) var presenceStates: [UserPresenceState] = []
     @Published private(set) var typingStatuses: [TypingStatus] = []
@@ -14,10 +15,13 @@ final class ChatViewModel: ObservableObject {
     let conversationID: String
     let currentUserID: String
     let conversationTitle: String
+    let isGroupConversation: Bool
 
     private let messageService: MessageService
+    private let storageService: StorageService?
     private let presenceService: PresenceService?
-    private let participants: [String]
+    private let participantIDs: [String]
+    private let participantDetails: [String: ConversationParticipant]
     private let modelContext: ModelContext
     private var listenerToken: MessageListeningToken?
     private var presenceListener: PresenceListeningToken?
@@ -28,15 +32,21 @@ final class ChatViewModel: ObservableObject {
     init(conversationID: String,
          currentUserID: String,
          messageService: MessageService,
+         storageService: StorageService?,
          presenceService: PresenceService?,
-         participants: [String],
+         participantIDs: [String],
+         participantDetails: [String: ConversationParticipant],
+         isGroupConversation: Bool,
          conversationTitle: String,
          modelContext: ModelContext) {
         self.conversationID = conversationID
         self.currentUserID = currentUserID
         self.messageService = messageService
+        self.storageService = storageService
         self.presenceService = presenceService
-        self.participants = participants
+        self.participantIDs = participantIDs
+        self.participantDetails = participantDetails
+        self.isGroupConversation = isGroupConversation
         self.conversationTitle = conversationTitle
         self.modelContext = modelContext
 
@@ -44,6 +54,38 @@ final class ChatViewModel: ObservableObject {
         startListening()
         observePresence()
         observeTyping()
+    }
+
+    private func uploadImageMessage(data: Data, localID: String) async {
+        guard let storageService else {
+            isUploadingMedia = false
+            return
+        }
+
+        do {
+            guard let processed = ImageCompressor.prepareImageData(data) else {
+                throw NSError(domain: "Chat", code: 0, userInfo: [
+                    NSLocalizedDescriptionKey: "Unable to process the selected image."
+                ])
+            }
+
+            let remoteURL = try await storageService.uploadImage(data: processed,
+                                                                 conversationID: conversationID,
+                                                                 fileName: "\(localID).jpg",
+                                                                 contentType: "image/jpeg")
+
+            let remote = try await messageService.sendMessage(to: conversationID,
+                                                              content: "Photo",
+                                                              type: .image,
+                                                              localID: localID,
+                                                              metadata: ["mediaURL": remoteURL.absoluteString])
+            try updateLocalMessage(localID: localID, with: remote)
+        } catch {
+            errorMessage = error.localizedDescription
+            try? markMessageFailed(localID: localID)
+        }
+
+        isUploadingMedia = false
     }
 
     deinit {
@@ -70,13 +112,46 @@ final class ChatViewModel: ObservableObject {
         }
 
         do {
-            try insertLocalMessage(localID: localID, content: trimmed)
+            try insertLocalMessage(localID: localID,
+                                   content: trimmed,
+                                   type: .text,
+                                   mediaURL: nil)
         } catch {
             errorMessage = error.localizedDescription
         }
 
         Task {
-            await sendMessage(content: trimmed, localID: localID)
+            await sendMessage(content: trimmed,
+                              type: .text,
+                              localID: localID,
+                              metadata: nil)
+        }
+    }
+
+    func sendImageMessage(with data: Data) {
+        guard storageService != nil else {
+            errorMessage = "Image uploads are unavailable."
+            return
+        }
+        guard !isUploadingMedia else { return }
+
+        let localID = UUID().uuidString
+
+        do {
+            try insertLocalMessage(localID: localID,
+                                   content: "Photo",
+                                   type: .image,
+                                   mediaURL: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+
+        isUploadingMedia = true
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.uploadImageMessage(data: data, localID: localID)
         }
     }
 
@@ -121,15 +196,18 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private func insertLocalMessage(localID: String, content: String) throws {
+    private func insertLocalMessage(localID: String,
+                                    content: String,
+                                    type: MessageContentType,
+                                    mediaURL: URL?) throws {
         guard let conversation = try fetchConversation() else { return }
         let message = Message(remoteID: localID,
                               localID: localID,
                               conversation: conversation,
                               senderUserID: currentUserID,
                               content: content,
-                              contentType: .text,
-                              mediaURL: nil,
+                              contentType: type,
+                              mediaURL: mediaURL,
                               timestamp: Date(),
                               deliveryStatus: .sending,
                               readByUserIDs: [currentUserID])
@@ -138,7 +216,10 @@ final class ChatViewModel: ObservableObject {
         loadLocalMessages()
     }
 
-    private func sendMessage(content: String, localID: String) async {
+    private func sendMessage(content: String,
+                             type: MessageContentType,
+                             localID: String,
+                             metadata: [String: Any]?) async {
         guard !isSending else { return }
         isSending = true
 
@@ -152,9 +233,9 @@ final class ChatViewModel: ObservableObject {
         do {
             let remote = try await messageService.sendMessage(to: conversationID,
                                                               content: content,
-                                                              type: .text,
+                                                              type: type,
                                                               localID: localID,
-                                                              metadata: nil)
+                                                              metadata: metadata)
             try updateLocalMessage(localID: localID, with: remote)
         } catch {
             errorMessage = error.localizedDescription
@@ -193,7 +274,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     var presenceStatusText: String {
-        let others = participants.filter { $0 != currentUserID }
+        let others = participantIDs.filter { $0 != currentUserID }
         guard !others.isEmpty else { return "" }
 
         let states = presenceStates.filter { others.contains($0.userID) }
@@ -215,8 +296,28 @@ final class ChatViewModel: ObservableObject {
     var typingIndicatorText: String? {
         let active = typingStatuses.filter { $0.isTyping }
         guard !active.isEmpty else { return nil }
-        if participants.count <= 2 {
+
+        let others = participantIDs.filter { $0 != currentUserID }
+        if others.count <= 1 {
             return "Typing..."
+        }
+
+        let names = active.compactMap { status -> String? in
+            guard let info = participantDetails[status.userID] else { return nil }
+            if let displayName = info.displayName, !displayName.isEmpty {
+                return displayName
+            }
+            if let username = info.username, !username.isEmpty {
+                return "@\(username)"
+            }
+            return nil
+        }
+
+        if names.count == 1 {
+            return "\(names[0]) is typing..."
+        }
+        if names.count == 2 {
+            return "\(names[0]) and \(names[1]) are typing..."
         }
         return "Multiple people typing..."
     }
@@ -230,6 +331,9 @@ final class ChatViewModel: ObservableObject {
         }
 
         message.remoteID = remote.id
+        message.content = remote.content
+        message.contentType = remote.type
+        message.mediaURL = remote.mediaURL
         message.timestamp = remote.timestamp
         message.deliveryStatus = remote.deliveryStatus
         message.readByUserIDs = remote.readBy
@@ -262,6 +366,7 @@ final class ChatViewModel: ObservableObject {
         for item in remote {
             if let existing = storedByRemoteID.removeValue(forKey: item.id) {
                 existing.content = item.content
+                existing.contentType = item.type
                 existing.timestamp = item.timestamp
                 existing.deliveryStatus = item.deliveryStatus
                 existing.readByUserIDs = item.readBy
@@ -272,6 +377,7 @@ final class ChatViewModel: ObservableObject {
                 storedByRemoteID[localExisting.remoteID] = nil
                 localExisting.remoteID = item.id
                 localExisting.content = item.content
+                localExisting.contentType = item.type
                 localExisting.timestamp = item.timestamp
                 localExisting.deliveryStatus = item.deliveryStatus
                 localExisting.readByUserIDs = item.readBy
@@ -310,7 +416,7 @@ final class ChatViewModel: ObservableObject {
 
     private func observePresence() {
         guard let presenceService else { return }
-        let targets = participants.filter { $0 != currentUserID }
+        let targets = participantIDs.filter { $0 != currentUserID }
         guard !targets.isEmpty else { return }
 
         presenceListener?.stop()
@@ -337,6 +443,21 @@ final class ChatViewModel: ObservableObject {
                 self?.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    func displayName(for userID: String) -> String? {
+        guard let info = participantDetails[userID] else { return nil }
+        if let displayName = info.displayName, !displayName.isEmpty {
+            return displayName
+        }
+        if let username = info.username, !username.isEmpty {
+            return "@\(username)"
+        }
+        return nil
+    }
+
+    func avatarURL(for userID: String) -> URL? {
+        participantDetails[userID]?.profilePictureURL
     }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {

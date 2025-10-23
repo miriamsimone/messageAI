@@ -1,11 +1,19 @@
 import Foundation
 
+struct ConversationParticipant: Equatable, Hashable, Sendable {
+    let id: String
+    let displayName: String?
+    let username: String?
+    let profilePictureURL: URL?
+}
+
 struct ConversationSummary: Identifiable, Equatable, Hashable, Sendable {
     let id: String
     let title: String
     let lastMessagePreview: String?
     let lastMessageAt: Date?
     let participantIDs: [String]
+    let participantDetails: [String: ConversationParticipant]
     let isGroup: Bool
     let groupAvatarURL: URL?
 }
@@ -25,6 +33,9 @@ protocol ConversationService {
     func listenForConversations(onChange: @escaping ([ConversationSummary]) -> Void,
                                 onError: @escaping (Error) -> Void) -> ConversationListeningToken
     func createOneOnOneConversation(with participant: ConversationCreationInput) async throws -> ConversationSummary
+    func createGroupConversation(name: String,
+                                 participants: [ConversationCreationInput],
+                                 groupAvatarURL: URL?) async throws -> ConversationSummary
 }
 
 #if canImport(FirebaseFirestore)
@@ -72,7 +83,15 @@ final class FirestoreConversationService: ConversationService {
                 let timestamp = (data["lastMessageTimestamp"] as? Timestamp)?.dateValue()
                 let isGroup = type == "group"
                 let participantDisplayNames = data["participantDisplayNames"] as? [String: String]
+                let participantUsernames = data["participantUsernames"] as? [String: String]
                 let participantAvatarURLs = data["participantProfilePictureURLs"] as? [String: String]
+                let participantDetails: [String: ConversationParticipant] = Dictionary(uniqueKeysWithValues: participants.map { userID in
+                    let avatarURL = participantAvatarURLs?[userID].flatMap(URL.init(string:))
+                    return (userID, ConversationParticipant(id: userID,
+                                                            displayName: participantDisplayNames?[userID],
+                                                            username: participantUsernames?[userID],
+                                                            profilePictureURL: avatarURL))
+                })
                 let conversationAvatarURL: URL? = {
                     if isGroup {
                         if let urlString = data["groupAvatarURL"] as? String {
@@ -108,6 +127,7 @@ final class FirestoreConversationService: ConversationService {
                                            lastMessagePreview: lastMessage,
                                            lastMessageAt: timestamp,
                                            participantIDs: participants,
+                                           participantDetails: participantDetails,
                                            isGroup: isGroup,
                                            groupAvatarURL: conversationAvatarURL)
             }
@@ -152,13 +172,92 @@ final class FirestoreConversationService: ConversationService {
             try await docRef.setData(data)
         }
 
+        let participantDetails: [String: ConversationParticipant] = [
+            currentUserID: ConversationParticipant(id: currentUserID,
+                                                   displayName: currentUserDisplayName,
+                                                   username: currentUsername,
+                                                   profilePictureURL: nil),
+            participant.userID: ConversationParticipant(id: participant.userID,
+                                                        displayName: participant.displayName,
+                                                        username: participant.username,
+                                                        profilePictureURL: participant.profilePictureURL)
+        ]
+
         return ConversationSummary(id: conversationID,
                                    title: participant.displayName,
                                    lastMessagePreview: nil,
                                    lastMessageAt: nil,
                                    participantIDs: participantIDs,
+                                   participantDetails: participantDetails,
                                    isGroup: false,
                                    groupAvatarURL: participant.profilePictureURL)
+    }
+
+    func createGroupConversation(name: String,
+                                 participants: [ConversationCreationInput],
+                                 groupAvatarURL: URL?) async throws -> ConversationSummary {
+        var allParticipantIDs = Set(participants.map(\.userID))
+        allParticipantIDs.insert(currentUserID)
+
+        if allParticipantIDs.count < 3 {
+            throw NSError(domain: "Conversation", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "Groups require at least 3 members."
+            ])
+        }
+
+        let docRef = db.collection("conversations").document()
+        let now = Timestamp(date: Date())
+
+        var participantDisplayNames: [String: String] = [
+            currentUserID: currentUserDisplayName
+        ]
+        var participantUsernames: [String: String] = [:]
+        var participantProfilePictureURLs: [String: String] = [:]
+
+        if let currentUsername {
+            participantUsernames[currentUserID] = currentUsername
+        }
+
+        for participant in participants {
+            participantDisplayNames[participant.userID] = participant.displayName
+            participantUsernames[participant.userID] = participant.username.nilIfEmpty
+            if let urlString = participant.profilePictureURL?.absoluteString {
+                participantProfilePictureURLs[participant.userID] = urlString
+            }
+        }
+
+        var data: [String: Any] = [
+            "type": "group",
+            "groupName": name,
+            "participants": Array(allParticipantIDs),
+            "participantDisplayNames": participantDisplayNames,
+            "participantUsernames": participantUsernames,
+            "participantProfilePictureURLs": participantProfilePictureURLs,
+            "createdBy": currentUserID,
+            "createdAt": now
+        ]
+
+        if let groupAvatarURL {
+            data["groupAvatarURL"] = groupAvatarURL.absoluteString
+        }
+
+        try await docRef.setData(data)
+
+        let participantDetails: [String: ConversationParticipant] = Dictionary(uniqueKeysWithValues: allParticipantIDs.map { userID in
+            ConversationParticipant(id: userID,
+                                    displayName: participantDisplayNames[userID],
+                                    username: participantUsernames[userID],
+                                    profilePictureURL: participantProfilePictureURLs[userID].flatMap(URL.init(string:)))
+        }.map { ($0.id, $0) })
+
+        return ConversationSummary(id: docRef.documentID,
+                                   title: name,
+                                   lastMessagePreview: nil,
+                                   lastMessageAt: nil,
+                                   participantIDs: Array(allParticipantIDs),
+                                   participantDetails: participantDetails,
+                                   isGroup: true,
+                                   groupAvatarURL: groupAvatarURL)
     }
 
     private func compactDictionary(_ values: [String: String?]) -> [String: String] {
@@ -191,6 +290,12 @@ final class FirestoreConversationService: ConversationService {
     }
 
     func createOneOnOneConversation(with participant: ConversationCreationInput) async throws -> ConversationSummary {
+        throw UserServiceError.firebaseSDKMissing
+    }
+
+    func createGroupConversation(name: String,
+                                 participants: [ConversationCreationInput],
+                                 groupAvatarURL: URL?) async throws -> ConversationSummary {
         throw UserServiceError.firebaseSDKMissing
     }
 }

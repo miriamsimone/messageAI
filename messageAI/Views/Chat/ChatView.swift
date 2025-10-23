@@ -14,7 +14,10 @@ struct ChatView: View {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(viewModel.messages) { message in
                             MessageBubbleView(message: message,
-                                              isCurrentUser: message.senderID == viewModel.currentUserID)
+                                              isCurrentUser: message.senderID == viewModel.currentUserID,
+                                              senderName: viewModel.displayName(for: message.senderID),
+                                              senderAvatarURL: viewModel.avatarURL(for: message.senderID),
+                                              isGroupConversation: viewModel.isGroupConversation)
                                 .id(message.id)
                         }
                     }
@@ -42,10 +45,14 @@ struct ChatView: View {
 
             MessageInputView(text: $viewModel.inputText,
                              isSending: viewModel.isSending,
+                             isUploadingMedia: viewModel.isUploadingMedia,
                              onSend: {
                                  viewModel.sendTextMessage()
                              },
-                             onTextChange: { viewModel.handleInputChange($0) })
+                             onTextChange: { viewModel.handleInputChange($0) },
+                             onMediaSelected: { data in
+                                 viewModel.sendImageMessage(with: data)
+                             })
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -61,6 +68,13 @@ struct ChatView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Error", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
     }
 
     @State private var scrollProxy: ScrollViewProxy?
@@ -72,5 +86,16 @@ struct ChatView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    viewModel.errorMessage = nil
+                }
+            }
+        )
     }
 }
