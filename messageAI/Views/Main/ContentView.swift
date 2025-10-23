@@ -50,7 +50,6 @@ struct ContentView: View {
             User.self,
             Conversation.self,
             Message.self,
-            TypingIndicator.self,
             Contact.self
         ], inMemory: true)
 }
