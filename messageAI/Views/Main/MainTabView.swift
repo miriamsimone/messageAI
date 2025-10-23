@@ -1,0 +1,83 @@
+import SwiftUI
+import SwiftData
+
+struct MainTabView: View {
+    private let session: AuthSession
+    private let onSignOut: () -> Void
+    @StateObject private var conversationViewModel: ConversationListViewModel
+    @StateObject private var contactsViewModel: UserSearchViewModel
+
+    init(session: AuthSession,
+         modelContext: ModelContext,
+         onSignOut: @escaping () -> Void) {
+        self.session = session
+        self.onSignOut = onSignOut
+        _conversationViewModel = StateObject(wrappedValue: ConversationListViewModel(
+            conversationService: FirestoreConversationService(
+                currentUserID: session.userID,
+                currentUserDisplayName: session.displayName ?? session.email,
+                currentUsername: session.username
+            ),
+            modelContext: modelContext,
+            currentUserID: session.userID
+        ))
+        _contactsViewModel = StateObject(wrappedValue: UserSearchViewModel(
+            userService: FirestoreUserService(currentUserID: session.userID),
+            modelContext: modelContext,
+            currentUserID: session.userID
+        ))
+    }
+
+    var body: some View {
+        TabView {
+            ConversationListView(viewModel: conversationViewModel,
+                                 currentUserID: session.userID)
+                .tabItem {
+                    Label("Chats", systemImage: "bubble.left.and.bubble.right")
+                }
+
+            ContactsView(viewModel: contactsViewModel)
+                .tabItem {
+                    Label("Contacts", systemImage: "person.2")
+                }
+
+            ProfilePlaceholderView(session: session,
+                                   onSignOut: onSignOut)
+                .tabItem {
+                    Label("Profile", systemImage: "person.crop.circle")
+                }
+        }
+    }
+}
+
+private struct ProfilePlaceholderView: View {
+    let session: AuthSession
+    let onSignOut: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.circle.fill")
+                .resizable()
+                .frame(width: 100, height: 100)
+                .foregroundStyle(.secondary)
+
+            Text(session.displayName ?? session.email)
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text("@\(session.username ?? "username")")
+                .foregroundStyle(.secondary)
+
+            Button(role: .destructive, action: onSignOut) {
+                Text("Sign Out")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .padding(.top, 16)
+
+            Spacer()
+        }
+        .padding()
+    }
+}

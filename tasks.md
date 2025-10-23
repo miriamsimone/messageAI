@@ -312,7 +312,24 @@ Create user document on signup
 Ensure username uniqueness via Cloud Function or security rules
 
 
-Task 1.6: Create Profile Image Picker
+Task 1.6: Persist User Profile Document
+Priority: P0
+Estimated Time: 4 hours
+Files Modified:
+
+messageAI/Services/UserService.swift
+messageAI/ViewModels/AuthViewModel.swift
+messageAI/Services/AuthService.swift
+
+Implementation:
+
+Add service endpoint to upsert Firestore user profiles with display name, username, and email
+Invoke profile persistence immediately after signup and username completion
+Update local SwiftData cache to reflect remote profile data
+Surface errors and retry guidance if profile creation fails
+
+
+Task 1.7: Create Profile Image Picker
 Priority: P0
 Estimated Time: 3 hours
 Files Created:
@@ -334,7 +351,7 @@ Upload to Firebase Storage
 Update user profile picture URL
 
 
-Task 1.7: Create Main App Entry Point
+Task 1.8: Create Main App Entry Point
 Priority: P0
 Estimated Time: 2 hours
 Files Modified:

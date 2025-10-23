@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var authViewModel = AuthViewModel()
 
     var body: some View {
@@ -23,10 +24,16 @@ struct ContentView: View {
                 SignUpView(viewModel: authViewModel)
             case .username(let session):
                 UsernameSetupView(viewModel: authViewModel, session: session)
-            case .authenticated:
-                Text("Conversations will appear here.")
-            }
+            case .authenticated(let session):
+                MainTabView(session: session,
+                            modelContext: modelContext,
+                            onSignOut: {
+                    Task {
+                        await authViewModel.signOut()
+                    }
+                })
         }
+    }
         .animation(.easeInOut, value: authViewModel.route)
     }
 }

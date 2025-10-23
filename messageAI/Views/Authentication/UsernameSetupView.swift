@@ -67,8 +67,11 @@ struct UsernameSetupView: View {
     }
 
     private func completeUsername() {
-        guard isFormValid else { return }
-        viewModel.completeUsernameSetup(username: username.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard isFormValid, !viewModel.isProcessing else { return }
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            await viewModel.completeUsernameSetup(username: trimmed)
+        }
     }
 }
 
@@ -76,4 +79,3 @@ struct UsernameSetupView: View {
     let session = AuthSession(userID: "123", email: "preview@example.com", displayName: "Preview", username: nil, photoURL: nil)
     UsernameSetupView(viewModel: AuthViewModel(), session: session)
 }
-
