@@ -2,8 +2,8 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     // Conversation media uploads
-    // Path: conversations/{conversationId}/media/{fileName}
-    match /conversations/{conversationId}/media/{fileName} {
+    // Path: conversations/{conversationId}/media/{allPaths=**}
+    match /conversations/{conversationId}/media/{allPaths=**} {
       // Helper function to check if user is a participant in the conversation
       function isParticipant() {
         return request.auth != null &&
@@ -30,8 +30,8 @@ service firebase.storage {
     }
     
     // User profile pictures
-    // Path: users/{userId}/profile/{fileName}
-    match /users/{userId}/profile/{fileName} {
+    // Path: users/{userId}/profile/{allPaths=**}
+    match /users/{userId}/profile/{allPaths=**} {
       // Helper function to validate profile picture
       function isValidProfilePicture() {
         return request.resource.size < 5 * 1024 * 1024 && // Max 5MB
@@ -51,8 +51,8 @@ service firebase.storage {
     }
     
     // Group conversation avatars
-    // Path: conversations/{conversationId}/avatar/{fileName}
-    match /conversations/{conversationId}/avatar/{fileName} {
+    // Path: conversations/{conversationId}/avatar/{allPaths=**}
+    match /conversations/{conversationId}/avatar/{allPaths=**} {
       // Helper function to check if user is a participant
       function isParticipant() {
         return request.auth != null &&
