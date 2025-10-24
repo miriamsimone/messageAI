@@ -6,16 +6,21 @@ struct ConversationListView: View {
     @StateObject private var viewModel: ConversationListViewModel
     private let currentUserID: String
     private let presenceService: PresenceService?
+    @Binding private var pendingRoute: NotificationRoute?
     @State private var navigationPath: [ConversationSummary] = []
     @State private var isPresentingNewConversation = false
     @State private var isPresentingNewGroup = false
+    @State private var activeRoute: NotificationRoute?
+    @State private var hasRequestedRefreshForActiveRoute = false
 
     init(viewModel: ConversationListViewModel,
          currentUserID: String,
-         presenceService: PresenceService?) {
+         presenceService: PresenceService?,
+         pendingRoute: Binding<NotificationRoute?> = .constant(nil)) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.currentUserID = currentUserID
         self.presenceService = presenceService
+        _pendingRoute = pendingRoute
     }
 
     var body: some View {
@@ -85,6 +90,15 @@ struct ConversationListView: View {
                     .shadow(radius: 8)
             }
         }
+        .onAppear {
+            syncRouteIfNeeded()
+        }
+        .onChange(of: pendingRoute) { _ in
+            syncRouteIfNeeded()
+        }
+        .onChange(of: viewModel.conversations) { _ in
+            fulfillRouteIfPossible()
+        }
     }
 
     @ViewBuilder
@@ -138,6 +152,28 @@ struct ConversationListView: View {
                     navigationPath = [summary]
                 }
             }
+        }
+    }
+
+    private func syncRouteIfNeeded() {
+        guard let pendingRoute else { return }
+        activeRoute = pendingRoute
+        hasRequestedRefreshForActiveRoute = false
+        fulfillRouteIfPossible()
+    }
+
+    private func fulfillRouteIfPossible() {
+        guard let route = activeRoute else { return }
+
+        if let target = viewModel.conversations.first(where: { $0.id == route.conversationID }) {
+            navigationPath = [target]
+            activeRoute = nil
+            pendingRoute = nil
+            hasRequestedRefreshForActiveRoute = false
+        } else {
+            guard !hasRequestedRefreshForActiveRoute else { return }
+            hasRequestedRefreshForActiveRoute = true
+            viewModel.refresh()
         }
     }
 }

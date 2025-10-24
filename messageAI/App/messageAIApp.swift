@@ -12,11 +12,13 @@ import SwiftData
 struct MessageAIApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let modelContainer = ModelContainerProvider.shared
+    @StateObject private var notificationService = NotificationService.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .modelContainer(modelContainer)
+                .environmentObject(notificationService)
         }
     }
 }

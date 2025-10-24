@@ -42,11 +42,13 @@
 		F6AEB6824E0547F28BAC744E /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD1D77A612184075AD5D9179 /* ChatViewModel.swift */; };
 		FD19E46DE8524A67A32442C4 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F533E34B5A9845AD8BC4FF4B /* MainTabView.swift */; };
 		FF2983878D454D028496FEE2 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01783C3DA05B49B6A07225C4 /* LoginView.swift */; };
+		FFA6A3C10AD3496192A9B162 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122A8490E4BA420F84D0A9E9 /* NotificationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01783C3DA05B49B6A07225C4 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LoginView.swift; path = messageAI/Views/Authentication/LoginView.swift; sourceTree = SOURCE_ROOT; };
 		0ABA0F2582C24769BAB1DC82 /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UserService.swift; path = messageAI/Services/UserService.swift; sourceTree = SOURCE_ROOT; };
+		122A8490E4BA420F84D0A9E9 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotificationService.swift; path = messageAI/Services/NotificationService.swift; sourceTree = SOURCE_ROOT; };
 		1144018F5F2A4D3B98297562 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Message.swift; path = messageAI/Models/Message.swift; sourceTree = SOURCE_ROOT; };
 		3E6CF3CADB84427FB12E26C9 /* UsernameSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UsernameSetupView.swift; path = messageAI/Views/Authentication/UsernameSetupView.swift; sourceTree = SOURCE_ROOT; };
 		3F7EAC19C2F249B9BF1BD429 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Conversation.swift; path = messageAI/Models/Conversation.swift; sourceTree = SOURCE_ROOT; };
@@ -140,6 +142,7 @@
 				6450876F20184FA594E7039B /* AuthService.swift */,
 				A8CE9F70F03D46E592E42446 /* ConversationService.swift */,
 				54AACC1AFE3542FCAC87F63F /* MessageService.swift */,
+				122A8490E4BA420F84D0A9E9 /* NotificationService.swift */,
 				0ABA0F2582C24769BAB1DC82 /* UserService.swift */,
 				B0AD492DA674410EA93D7F33 /* AuthViewModel.swift */,
 				5794C8682F40473A8C55E444 /* UserSearchViewModel.swift */,
@@ -255,6 +258,7 @@
 				02E9CF9A76274F968FB0C355 /* UserService.swift in Sources */,
 				5574CF2C0B86499B8F1E4514 /* ConversationService.swift in Sources */,
 				F3EA28A5A25D4AFB8C039655 /* MessageService.swift in Sources */,
+				FFA6A3C10AD3496192A9B162 /* NotificationService.swift in Sources */,
 				100F95A5F9E84BAEBFD55E7B /* UserSearchViewModel.swift in Sources */,
 				E18CBAAC98B84B7AB7A91EAA /* ConversationListViewModel.swift in Sources */,
 				F6AEB6824E0547F28BAC744E /* ChatViewModel.swift in Sources */,

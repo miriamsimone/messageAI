@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import SwiftData
 
 struct MainTabView: View {
@@ -7,7 +8,10 @@ struct MainTabView: View {
     private let onSignOut: () -> Void
     @StateObject private var conversationViewModel: ConversationListViewModel
     @StateObject private var contactsViewModel: UserSearchViewModel
+    @EnvironmentObject private var notificationService: NotificationService
     @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedTab = Tab.chats
+    @State private var pendingNotificationRoute: NotificationRoute?
 
     init(session: AuthSession,
          modelContext: ModelContext,
@@ -33,24 +37,28 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ConversationListView(viewModel: conversationViewModel,
                                  currentUserID: session.userID,
-                                 presenceService: presenceService)
+                                 presenceService: presenceService,
+                                 pendingRoute: $pendingNotificationRoute)
                 .tabItem {
                     Label("Chats", systemImage: "bubble.left.and.bubble.right")
                 }
+                .tag(Tab.chats)
 
             ContactsView(viewModel: contactsViewModel)
                 .tabItem {
                     Label("Contacts", systemImage: "person.2")
                 }
+                .tag(Tab.contacts)
 
             ProfilePlaceholderView(session: session,
                                    onSignOut: onSignOut)
                 .tabItem {
                     Label("Profile", systemImage: "person.crop.circle")
                 }
+                .tag(Tab.profile)
         }
         .task {
             try? await presenceService.setUserOnline()
@@ -68,6 +76,14 @@ struct MainTabView: View {
                     break
                 }
             }
+        }
+        .task {
+            await notificationService.requestAuthorizationIfNeeded()
+        }
+        .onReceive(notificationService.$pendingRoute.compactMap { $0 }) { route in
+            selectedTab = .chats
+            pendingNotificationRoute = route
+            notificationService.clearPendingRoute(id: route.id)
         }
     }
 }
@@ -101,5 +117,13 @@ private struct ProfilePlaceholderView: View {
             Spacer()
         }
         .padding()
+    }
+}
+
+private extension MainTabView {
+    enum Tab: Hashable {
+        case chats
+        case contacts
+        case profile
     }
 }

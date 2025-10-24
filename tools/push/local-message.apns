@@ -1,0 +1,12 @@
+{
+  "aps": {
+    "alert": {
+      "title": "New message from Ada Lovelace",
+      "body": "Ready to test push routing?"
+    },
+    "sound": "default"
+  },
+  "conversationId": "SIM_CONVERSATION_ID",
+  "senderDisplayName": "Ada Lovelace",
+  "messagePreview": "Ready to test push routing?"
+}
