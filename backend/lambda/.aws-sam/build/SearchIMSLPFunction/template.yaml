@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        OPENAI_API_KEY: !Ref OpenAIApiKey
+        BRAVE_API_KEY: !Ref BraveApiKey
+        FIREBASE_SERVICE_ACCOUNT: !Ref FirebaseServiceAccount
+
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+  BraveApiKey:
+    Type: String
+    NoEcho: true
+  FirebaseServiceAccount:
+    Type: String
+    NoEcho: true
+    Description: Base64 encoded Firebase service account JSON
+
+Resources:
+  GenerateSheetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.generate_sheet.handler
+      Runtime: python3.11
+      Events:
+        GenerateSheet:
+          Type: Api
+          Properties:
+            Path: /generate-sheet
+            Method: post
+
+  EditChordsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.edit_chords.handler
+      Runtime: python3.11
+      Events:
+        EditChords:
+          Type: Api
+          Properties:
+            Path: /edit-chords
+            Method: post
+
+  SearchIMSLPFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.search_imslp.handler
+      Runtime: python3.11
+      Events:
+        SearchIMSLP:
+          Type: Api
+          Properties:
+            Path: /search-imslp
+            Method: post
+
+  RecommendFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.recommend.handler
+      Runtime: python3.11
+      Events:
+        Recommend:
+          Type: Api
+          Properties:
+            Path: /recommend
+            Method: post
