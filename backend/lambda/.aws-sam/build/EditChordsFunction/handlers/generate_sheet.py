@@ -143,6 +143,80 @@ def extract_song_name_fallback(user_input):
     
     return clean_input
 
+def is_classical_music_search(song_name):
+    """Detect if this is a classical music search"""
+    classical_keywords = [
+        'moonlight sonata', 'beethoven', 'bach', 'chopin', 'mozart', 'brahms',
+        'schubert', 'schumann', 'liszt', 'debussy', 'ravel', 'tchaikovsky',
+        'rachmaninoff', 'prokofiev', 'shostakovich', 'stravinsky', 'bartok',
+        'sonata', 'concerto', 'symphony', 'nocturne', 'prelude', 'fugue',
+        'etude', 'waltz', 'mazurka', 'polonaise', 'impromptu', 'ballade',
+        'classical', 'baroque', 'romantic', 'impressionist'
+    ]
+    
+    song_lower = song_name.lower()
+    return any(keyword in song_lower for keyword in classical_keywords)
+
+def handle_classical_search(song_name):
+    """Handle classical music search by calling IMSLP"""
+    try:
+        # Import the Mutopia search function
+        from handlers.search_imslp import search_imslp
+        
+        # Search Mutopia Project using Brave Search
+        mutopia_results = search_imslp(song_name)
+        
+        if not mutopia_results:
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'No classical music found',
+                    'message': f'No classical music found for "{song_name}"'
+                })
+            }
+        
+        # Get first result
+        first_result = mutopia_results[0]
+        
+        # Return in the same format as tab search but with classical music data
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'status': 'success',
+                'classical_music': True,
+                'pdf_url': first_result.get('pdf_url', ''),
+                'title': first_result.get('title', 'Unknown'),
+                'composer': first_result.get('composer', 'Unknown'),
+                'opus': first_result.get('opus', ''),
+                'mutopia_url': first_result.get('mutopia_url', ''),
+                'description': first_result.get('description', ''),
+                'message': f'Found classical music: {first_result.get("title", "Unknown")} by {first_result.get("composer", "Unknown")}',
+                'sources': [first_result.get('mutopia_url', '')]
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error in classical search: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'error': str(e),
+                'message': 'Error searching classical music'
+            })
+        }
+
 def handler(event, context):
     """Generate sheet music ABC notation from song name"""
     
@@ -154,6 +228,11 @@ def handler(event, context):
         
         # Extract clean song name from user input
         song_name = extract_song_name(raw_song_name)
+        
+        # Check if this is a classical music search
+        if is_classical_music_search(song_name):
+            print(f"Detected classical music search: {song_name}")
+            return handle_classical_search(song_name)
         
         print(f"Generating sheet music for: {song_name}, instrument: {instrument}")
         
